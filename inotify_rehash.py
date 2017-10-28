@@ -63,13 +63,13 @@ pydle_thread.start()
 # Setup inotify.
 wm = pyinotify.WatchManager()
 
-# Only watch for a write() then close().
-mask = pyinotify.IN_CLOSE_WRITE
+# Only watch for a modification of the file.
+mask = pyinotify.IN_MODIFY
 
 # EventHandler for pyinotify.
 class EventHandler(pyinotify.ProcessEvent):
-	def process_IN_CLOSE_WRITE(self, event):
-		# Run a REHASH on a write() then close() of our file.
+	def process_IN_MODIFY(self, event):
+		# Run a REHASH when the file is modified.
 		global client
 		client.rawmsg("REHASH")
 
