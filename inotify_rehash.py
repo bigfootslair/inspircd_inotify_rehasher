@@ -1,64 +1,46 @@
 #!/bin/env python3
 import os
-import threading
+import signal
 import pyinotify
 import configparser
 import argparse
-import pydle
 
-# Global variable we use to access pydle.
-global client
+# Subclass configparser.RawConfigPaser to add getlist().
+class config(configparser.RawConfigParser):
+	def getlist(self, section, option):
+		""" Get's a list from a CSV value. """
+		# Get the csv from the config.
+		value = self.get(section, option)
 
-# Get the config file from our command line arguments.
+		# Create the returning list.
+		return_object = list()
+
+		# If the value is blank the return a blank list.
+		if value == "" or not value:
+			return return_object
+
+		# Convert CSV to a list.
+		for each in value.split(','):
+			# Strip the trailing space if any.
+			each = each.strip(' ')
+			# Add it to the list
+			return_object.append(each)
+
+		# Return the list.
+		return return_object
+
+# Get the config file and pid from our command line arguments.
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", required = True)
+parser.add_argument("--pid", required = True, type = int)
 args = parser.parse_args()
 
 # Parse the config file.
-config = configparser.ConfigParser()
+config = config()
 config.read(args.config)
 
-# Get all the variables.
-file = config.get("main", "file")
-username = config.get("main", "username")
-password = config.get("main", "password")
-server = config.get("main", "server")
-nick = config.get("main", "nickname")
-port = config.getint("main", "port")
-ssl = config.getboolean("main", "ssl")
-
-# Define our pydle client here.
-class pydle_client(pydle.Client):
-	""" Subclass of pydle.Client to OPER-up on connect. """
-	def on_connect(self):
-		""" Called on connect. """
-		# Call superclass.
-		super().on_connect()
-
-		# OPER-up.
-		self.rawmsg("OPER", username, password)
-
-	def on_raw_491(self, message):
-		""" Called when we get numeric 491 'Invalid oper credentials'. """
-		# Failed to OPER-up, exit.
-		print("ERROR: We have failed to OPER-up, exiting.")
-
-		# Kill the main thread.
-		os._exit(1)
-
-# Threading function to run pydle in a seperate thread.
-def start_pydle():
-	# We need to access our global.
-	global client
-
-	# Setup pydle from the variables defined from the top of the file.
-	client = pydle_client(nick)
-	client.connect(server, port, ssl)
-	client.handle_forever()
-
-# Setup the pydle thread.
-pydle_thread = threading.Thread(target=start_pydle, daemon = True)
-pydle_thread.start()
+# Get the files to scan.
+files = config.getlist("main", "files")
 
 # Setup inotify.
 wm = pyinotify.WatchManager()
@@ -69,16 +51,21 @@ mask = pyinotify.IN_MODIFY
 # EventHandler for pyinotify.
 class EventHandler(pyinotify.ProcessEvent):
 	def process_IN_MODIFY(self, event):
-		# Run a REHASH when the file is modified.
-		global client
-		client.rawmsg("REHASH")
+		# Run a REHASH (send SIGHUP) when the file is modified.
+		try:
+			os.kill(args.pid, signal.SIGHUP)
+		except ProcessLookupError:
+			print("Error sending signal to inspircd, is it running?")
+			os._exit(1)
 
 # Setup the EventHandler and Notifier.
 handler = EventHandler()
 notifier = pyinotify.Notifier(wm, handler)
 
-# Setup the watch.
-wdd = wm.add_watch(file, mask)
+# Setup the watches.
+wdd = []
+for file in files:
+	wdd.append(wm.add_watch(file, mask))
 
 # Loop forever.
 notifier.loop()
