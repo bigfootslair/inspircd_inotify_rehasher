@@ -1,0 +1,9 @@
+[main]
+file = /file/to/watch 
+username = oper_username
+password = oper_password
+server = irc.server.org
+nicknick = bot_nick
+port = 6697
+ssl = True
+
