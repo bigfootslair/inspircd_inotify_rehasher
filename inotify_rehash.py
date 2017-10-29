@@ -8,7 +8,7 @@ import argparse
 # Subclass configparser.RawConfigPaser to add getlist().
 class config(configparser.RawConfigParser):
 	def getlist(self, section, option):
-		""" Get's a list from a CSV value. """
+		""" Gets a list from a CSV value. """
 		# Get the csv from the config.
 		value = self.get(section, option)
 
